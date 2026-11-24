@@ -1,0 +1,39 @@
+rules_version = '2';
+
+// Regras de segurança: quem pode ler e escrever reviews.
+// Cola isto em Firebase Console → Firestore Database → Regras → Publicar.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /reviews/{reviewId} {
+
+      // Qualquer pessoa pode ver as reviews
+      allow read: if true;
+
+      // Só se pode criar uma review com os campos certos e tamanhos razoáveis
+      // (só contas Google)
+      allow create: if request.auth != null
+        && request.auth.token.firebase.sign_in_provider == 'google.com'
+        && request.resource.data.keys().hasOnly(['product', 'rating', 'tiktokId', 'pinId', 'comment', 'name', 'uid', 'createdAt'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.product is string
+        && request.resource.data.product.size() >= 2 && request.resource.data.product.size() <= 80
+        && request.resource.data.rating is int
+        && request.resource.data.rating >= 1 && request.resource.data.rating <= 5
+        && request.resource.data.tiktokId is string
+        && (request.resource.data.tiktokId == '' || request.resource.data.tiktokId.matches('[0-9]{10,25}'))
+        && request.resource.data.pinId is string
+        && (request.resource.data.pinId == '' || request.resource.data.pinId.matches('[0-9]{5,25}'))
+        && request.resource.data.comment is string && request.resource.data.comment.size() <= 500
+        && request.resource.data.name is string && request.resource.data.name.size() <= 40
+        && (request.resource.data.tiktokId != '' || request.resource.data.pinId != '' || request.resource.data.comment.size() > 0)
+        && request.resource.data.createdAt == request.time;
+
+      // Cada pessoa só pode apagar as suas próprias reviews (tu apagas qualquer uma na consola do Firebase)
+      allow delete: if request.auth != null && resource.data.uid == request.auth.uid;
+
+      // Ninguém edita reviews depois de publicadas
+      allow update: if false;
+    }
+  }
+}
